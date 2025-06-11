@@ -228,6 +228,11 @@ func (r *ReconcileZone) zoneHasDependents(ctx context.Context, zone *crdsv1alpha
 		return hasDeps, err
 	}
 
+	hasDeps, err = r.zoneHasRateLimitDependents(ctx, crdsClient.RateLimits(zone.Namespace), zone.Name)
+	if err != nil || hasDeps {
+		return hasDeps, err
+	}
+
 	return false, nil
 }
 
@@ -299,6 +304,22 @@ func (r *ReconcileZone) zoneHasWorkerRouteDependents(ctx context.Context, client
 
 	for _, item := range list.Items {
 		if item.Spec.Zone == zone {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// Add the following function for RateLimit dependencies
+func (r *ReconcileZone) zoneHasRateLimitDependents(ctx context.Context, client crdsclientv1alpha1.RateLimitInterface, zone string) (bool, error) {
+	list, err := client.List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	for _, item := range list.Items {
+		if item.Spec.ZoneID == zone {
 			return true, nil
 		}
 	}

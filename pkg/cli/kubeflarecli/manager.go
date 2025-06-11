@@ -8,6 +8,7 @@ import (
 	apitokencontroller "github.com/replicatedhq/kubeflare/pkg/controller/apitoken"
 	dnsrecordcontroller "github.com/replicatedhq/kubeflare/pkg/controller/dnsrecord"
 	pagerulecontroller "github.com/replicatedhq/kubeflare/pkg/controller/pagerule"
+	ratelimitcontroller "github.com/replicatedhq/kubeflare/pkg/controller/ratelimit"
 	wafrulecontroller "github.com/replicatedhq/kubeflare/pkg/controller/webapplicationfirewallrule"
 	workerroutecontroller "github.com/replicatedhq/kubeflare/pkg/controller/workerroute"
 	zonecontroller "github.com/replicatedhq/kubeflare/pkg/controller/zone"
@@ -104,6 +105,11 @@ func ManagerCmd() *cobra.Command {
 			}
 
 			if err := workerroutecontroller.Add(mgr); err != nil {
+				logger.Error(err)
+				os.Exit(1)
+			}
+
+			if err := ratelimitcontroller.Add(mgr); err != nil {
 				logger.Error(err)
 				os.Exit(1)
 			}
