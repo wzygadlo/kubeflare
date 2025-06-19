@@ -3,10 +3,10 @@ package ratelimit
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/cloudflare/cloudflare-go"
-	kubeflarev1alpha1 "github.com/replicatedhq/kubeflare/pkg/apis/kubeflare/v1alpha1"
+	kubeflarev1alpha1 "github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
 	cfratelimit "github.com/replicatedhq/kubeflare/pkg/cloudflare/ratelimit"
 	"github.com/replicatedhq/kubeflare/pkg/controller/shared"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -14,6 +14,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -32,7 +33,8 @@ type RateLimitReconciler struct {
 // +kubebuilder:rbac:groups=kubeflare.replicated.com,resources=ratelimits/finalizers,verbs=update
 
 // Reconcile handles reconciliation of RateLimit resources
-func (r *RateLimitReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *RateLimitReconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
+	ctx := context.Background()
 	logger := log.FromContext(ctx)
 
 	// Fetch the RateLimit instance
@@ -57,7 +59,7 @@ func (r *RateLimitReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if updateErr := r.Status().Update(ctx, rateLimit); updateErr != nil {
 			logger.Error(updateErr, "Failed to update status")
 		}
-		return ctrl.Result{RequeueAfter: time.Minute * 5}, err
+		return reconcile.Result{RequeueAfter: time.Minute * 5}, err
 	}
 
 	// Initialize Cloudflare client for this zone
@@ -69,7 +71,7 @@ func (r *RateLimitReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if updateErr := r.Status().Update(ctx, rateLimit); updateErr != nil {
 			logger.Error(updateErr, "Failed to update status")
 		}
-		return ctrl.Result{RequeueAfter: time.Minute * 5}, err
+		return reconcile.Result{RequeueAfter: time.Minute * 5}, err
 	}
 
 	// Initialize rate limit client if not already
@@ -87,9 +89,9 @@ func (r *RateLimitReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		rateLimit.ObjectMeta.Finalizers = append(rateLimit.ObjectMeta.Finalizers, finalizerName)
 		if err := r.Update(ctx, rateLimit); err != nil {
 			logger.Error(err, "Failed to add finalizer")
-			return ctrl.Result{}, err
+			return reconcile.Result{}, err
 		}
-		return ctrl.Result{}, nil
+		return reconcile.Result{}, nil
 	}
 
 	// If no ID is present, or if the resource has been modified, sync with Cloudflare
@@ -102,7 +104,8 @@ func (r *RateLimitReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	cfRateLimit, err := r.CFClient.Get(ctx, rateLimit.Spec.ZoneID, rateLimit.Status.ID)
 	if err != nil {
 		// If the rate limit doesn't exist in Cloudflare anymore, clear the ID
-		if cloudFlareErr, ok := err.(*cloudflare.Error); ok && cloudFlareErr.StatusCode == 404 {
+		// Check if it's a 404 error by looking at the error string or using a different approach
+		if isNotFoundError(err) {
 			logger.Info("Rate limit not found in Cloudflare, will recreate", "id", rateLimit.Status.ID)
 			rateLimit.Status.ID = ""
 			rateLimit.Status.Status = "NotFound"
@@ -110,19 +113,19 @@ func (r *RateLimitReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if updateErr := r.Status().Update(ctx, rateLimit); updateErr != nil {
 				logger.Error(updateErr, "Failed to update status")
 			}
-			return ctrl.Result{Requeue: true}, nil
+			return reconcile.Result{Requeue: true}, nil
 		}
 
 		logger.Error(err, "Failed to get rate limit from Cloudflare")
-		return ctrl.Result{RequeueAfter: time.Minute * 5}, nil
+		return reconcile.Result{RequeueAfter: time.Minute * 5}, nil
 	}
 
 	logger.V(1).Info("Rate limit exists in Cloudflare", "id", cfRateLimit.ID)
-	return ctrl.Result{RequeueAfter: time.Hour * 24}, nil
+	return reconcile.Result{RequeueAfter: time.Hour * 24}, nil
 }
 
 // reconcileDelete handles deletion of a RateLimit resource
-func (r *RateLimitReconciler) reconcileDelete(ctx context.Context, rateLimit *kubeflarev1alpha1.RateLimit) (ctrl.Result, error) {
+func (r *RateLimitReconciler) reconcileDelete(ctx context.Context, rateLimit *kubeflarev1alpha1.RateLimit) (reconcile.Result, error) {
 	logger := log.FromContext(ctx)
 
 	// If the resource has a Cloudflare ID, delete it from Cloudflare
@@ -130,11 +133,11 @@ func (r *RateLimitReconciler) reconcileDelete(ctx context.Context, rateLimit *ku
 		err := r.CFClient.Delete(ctx, rateLimit.Spec.ZoneID, rateLimit.Status.ID)
 		if err != nil {
 			// If the rate limit doesn't exist (404), ignore the error
-			if cloudFlareErr, ok := err.(*cloudflare.Error); ok && cloudFlareErr.StatusCode == 404 {
+			if isNotFoundError(err) {
 				logger.Info("Rate limit already deleted from Cloudflare", "id", rateLimit.Status.ID)
 			} else {
 				logger.Error(err, "Failed to delete rate limit from Cloudflare")
-				return ctrl.Result{}, err
+				return reconcile.Result{}, err
 			}
 		} else {
 			logger.Info("Successfully deleted rate limit from Cloudflare", "id", rateLimit.Status.ID)
@@ -145,14 +148,14 @@ func (r *RateLimitReconciler) reconcileDelete(ctx context.Context, rateLimit *ku
 	rateLimit.ObjectMeta.Finalizers = removeString(rateLimit.ObjectMeta.Finalizers, finalizerName)
 	if err := r.Update(ctx, rateLimit); err != nil {
 		logger.Error(err, "Failed to remove finalizer")
-		return ctrl.Result{}, err
+		return reconcile.Result{}, err
 	}
 
-	return ctrl.Result{}, nil
+	return reconcile.Result{}, nil
 }
 
 // reconcileSync handles creation or update of a RateLimit resource
-func (r *RateLimitReconciler) reconcileSync(ctx context.Context, rateLimit *kubeflarev1alpha1.RateLimit) (ctrl.Result, error) {
+func (r *RateLimitReconciler) reconcileSync(ctx context.Context, rateLimit *kubeflarev1alpha1.RateLimit) (reconcile.Result, error) {
 	logger := log.FromContext(ctx)
 
 	// If there's no ID, create a new rate limit
@@ -165,7 +168,7 @@ func (r *RateLimitReconciler) reconcileSync(ctx context.Context, rateLimit *kube
 			if updateErr := r.Status().Update(ctx, rateLimit); updateErr != nil {
 				logger.Error(updateErr, "Failed to update status")
 			}
-			return ctrl.Result{RequeueAfter: time.Minute * 5}, err
+			return reconcile.Result{RequeueAfter: time.Minute * 5}, err
 		}
 
 		// Update status with new ID and generation
@@ -175,18 +178,18 @@ func (r *RateLimitReconciler) reconcileSync(ctx context.Context, rateLimit *kube
 		rateLimit.Status.ObservedGeneration = rateLimit.Generation
 		if err := r.Status().Update(ctx, rateLimit); err != nil {
 			logger.Error(err, "Failed to update status")
-			return ctrl.Result{}, err
+			return reconcile.Result{}, err
 		}
 
 		logger.Info("Created rate limit in Cloudflare", "id", id)
-		return ctrl.Result{}, nil
+		return reconcile.Result{}, nil
 	}
 
 	// Otherwise, update the existing rate limit
 	err := r.CFClient.Update(ctx, rateLimit)
 	if err != nil {
 		// If the rate limit doesn't exist anymore, clear the ID so it will be recreated
-		if cloudFlareErr, ok := err.(*cloudflare.Error); ok && cloudFlareErr.StatusCode == 404 {
+		if isNotFoundError(err) {
 			logger.Info("Rate limit not found in Cloudflare during update, will recreate", "id", rateLimit.Status.ID)
 			rateLimit.Status.ID = ""
 			rateLimit.Status.Status = "NotFound"
@@ -194,7 +197,7 @@ func (r *RateLimitReconciler) reconcileSync(ctx context.Context, rateLimit *kube
 			if updateErr := r.Status().Update(ctx, rateLimit); updateErr != nil {
 				logger.Error(updateErr, "Failed to update status")
 			}
-			return ctrl.Result{Requeue: true}, nil
+			return reconcile.Result{Requeue: true}, nil
 		}
 
 		logger.Error(err, "Failed to update rate limit in Cloudflare")
@@ -203,7 +206,7 @@ func (r *RateLimitReconciler) reconcileSync(ctx context.Context, rateLimit *kube
 		if updateErr := r.Status().Update(ctx, rateLimit); updateErr != nil {
 			logger.Error(updateErr, "Failed to update status")
 		}
-		return ctrl.Result{RequeueAfter: time.Minute * 5}, err
+		return reconcile.Result{RequeueAfter: time.Minute * 5}, err
 	}
 
 	// Update observed generation
@@ -212,11 +215,11 @@ func (r *RateLimitReconciler) reconcileSync(ctx context.Context, rateLimit *kube
 	rateLimit.Status.ObservedGeneration = rateLimit.Generation
 	if err := r.Status().Update(ctx, rateLimit); err != nil {
 		logger.Error(err, "Failed to update status")
-		return ctrl.Result{}, err
+		return reconcile.Result{}, err
 	}
 
 	logger.Info("Updated rate limit in Cloudflare", "id", rateLimit.Status.ID)
-	return ctrl.Result{}, nil
+	return reconcile.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager
@@ -227,6 +230,19 @@ func (r *RateLimitReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // Helper functions
+
+// isNotFoundError checks if the error indicates a resource was not found (404)
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Check if the error contains "404" or "not found" in the message
+	errStr := err.Error()
+	return strings.Contains(strings.ToLower(errStr), "404") ||
+		strings.Contains(strings.ToLower(errStr), "not found") ||
+		strings.Contains(strings.ToLower(errStr), "resource not found")
+}
+
 func containsString(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {

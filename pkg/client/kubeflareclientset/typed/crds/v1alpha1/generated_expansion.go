@@ -26,6 +26,8 @@ type DNSRecordExpansion interface{}
 
 type PageRuleExpansion interface{}
 
+type RateLimitExpansion interface{}
+
 type WebApplicationFirewallRuleExpansion interface{}
 
 type WorkerRouteExpansion interface{}

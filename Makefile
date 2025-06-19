@@ -1,6 +1,6 @@
 
 SHELL := /bin/bash
-VERSION ?=`git describe --tags`
+VERSION ?= $(shell git describe --tags 2>/dev/null || echo "dev")
 DATE=`date -u +"%Y-%m-%dT%H:%M:%SZ"`
 VERSION_PACKAGE = github.com/replicatedhq/kubeflare/pkg/version
 GIT_TREE = $(shell git rev-parse --is-inside-work-tree 2>/dev/null)
@@ -47,7 +47,6 @@ integration: integration-bin
 integration-bin: generate fmt vet manifests
 	go build \
 		${LDFLAGS} \
-		-i \
 		-o bin/integration \
 		./cmd/integration
 
@@ -62,7 +61,6 @@ kubeflare: generate fmt vet bin/kubeflare
 bin/kubeflare:
 	go build \
 		${LDFLAGS} \
-		-i \
 		-o bin/kubeflare \
 		./cmd/kubeflare
 
@@ -82,11 +80,6 @@ deploy: manifests
 
 .PHONY: manifests
 manifests: controller-gen
-	$(CONTROLLER_GEN) \
-		rbac:roleName=manager-role webhook \
-		crd:crdVersions=v1beta1 \
-		output:crd:artifacts:config=config/crds/v1beta1 \
-		paths="./..."
 	$(CONTROLLER_GEN) \
 		rbac:roleName=manager-role webhook \
 		crd:crdVersions=v1 \
@@ -109,22 +102,23 @@ generate: controller-gen client-gen
 		--clientset-name kubeflareclientset \
 		--input-base github.com/replicatedhq/kubeflare/pkg/apis \
 		--input crds/v1alpha1 \
+		--output-base ./ \
 		-h ./hack/boilerplate.go.txt
 
 .PHONY: dev
 dev: kubeflare
 	docker build -t kubeflare/kubeflare-manager -f ./Dockerfile.manager .
-	docker tag kubeflare/kubeflare-manager localhost:32000/kubeflare/kubeflare-manager:latest
-	docker push localhost:32000/kubeflare/kubeflare-manager:latest
+	docker tag kubeflare/kubeflare-manager localhost:5000/kubeflare/kubeflare-manager:latest
+	docker push localhost:5000/kubeflare/kubeflare-manager:latest
 
 .PHONY: image
 image: kubeflare
 	docker build -t kubeflare/kubeflare-manager:$(IMAGE_TAG) -f ./Dockerfile.manager .
 
-.PHONY: contoller-gen
+.PHONY: controller-gen
 controller-gen:
 ifeq (, $(shell which controller-gen))
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1
+	go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.14.0
 CONTROLLER_GEN=$(shell go env GOPATH)/bin/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
@@ -133,7 +127,7 @@ endif
 .PHONY: client-gen
 client-gen:
 ifeq (, $(shell which client-gen))
-	go get k8s.io/code-generator/cmd/client-gen@kubernetes-1.19.16
+	go install k8s.io/code-generator/cmd/client-gen@v0.29.0
 CLIENT_GEN=$(shell go env GOPATH)/bin/client-gen
 else
 CLIENT_GEN=$(shell which client-gen)

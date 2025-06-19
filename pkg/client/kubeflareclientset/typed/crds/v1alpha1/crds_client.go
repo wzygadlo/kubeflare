@@ -56,6 +56,11 @@ func (c *CrdsV1alpha1Client) PageRules(namespace string) PageRuleInterface {
 	return newPageRules(c, namespace)
 }
 
+// RateLimits returns a RateLimitInterface
+func (c *CrdsV1alpha1Client) RateLimits(namespace string) RateLimitInterface {
+	return newRateLimits(c, namespace)
+}
+
 func (c *CrdsV1alpha1Client) WebApplicationFirewallRules(namespace string) WebApplicationFirewallRuleInterface {
 	return newWebApplicationFirewallRules(c, namespace)
 }

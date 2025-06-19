@@ -9,4 +9,4 @@ run:
 	make -C tests/browser-cache-ttl run
 	make -C tests/cache-level run
 	make -C tests/minify run
-	make -C tests/mobile-redirect run
+	make -C tests/mobile-redirect runkubectl logs -n kubeflare-system deployment/kubeflare
