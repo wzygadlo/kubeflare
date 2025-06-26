@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	cf "github.com/cloudflare/cloudflare-go"
+	cf "github.com/cloudflare/cloudflare-go/v4"
 	"github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
 )
 

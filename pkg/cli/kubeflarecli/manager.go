@@ -4,17 +4,12 @@ import (
 	"os"
 
 	"github.com/replicatedhq/kubeflare/pkg/apis"
-	// accessapplicationcontroller "github.com/replicatedhq/kubeflare/pkg/controller/accessapplication"
-	// apitokencontroller "github.com/replicatedhq/kubeflare/pkg/controller/apitoken"
-	// dnsrecordcontroller "github.com/replicatedhq/kubeflare/pkg/controller/dnsrecord"
-	// pagerulecontroller "github.com/replicatedhq/kubeflare/pkg/controller/pagerule"
+	apitokencontroller "github.com/replicatedhq/kubeflare/pkg/controller/apitoken"
 	ratelimitcontroller "github.com/replicatedhq/kubeflare/pkg/controller/ratelimit"
-	// wafrulecontroller "github.com/replicatedhq/kubeflare/pkg/controller/webapplicationfirewallrule"
-	// workerroutecontroller "github.com/replicatedhq/kubeflare/pkg/controller/workerroute"
-	// zonecontroller "github.com/replicatedhq/kubeflare/pkg/controller/zone"
+	wafrulecontroller "github.com/replicatedhq/kubeflare/pkg/controller/webapplicationfirewallrule"
+	zonecontroller "github.com/replicatedhq/kubeflare/pkg/controller/zone"
 	"github.com/replicatedhq/kubeflare/pkg/logger"
 	"github.com/replicatedhq/kubeflare/pkg/version"
-	// "github.com/replicatedhq/kubeflare/pkg/webhook"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -68,30 +63,36 @@ func ManagerCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			// Temporarily disable problematic controllers to focus on rate limiting
-			logger.Info("Starting with rate limiting controller only")
+			logger.Info("Starting Kubeflare Security Operator (WAF + Rate Limits)")
 
-			if err := ratelimitcontroller.Add(mgr); err != nil {
+			// Enable API Token protection based on flag
+			protectAPIToken := v.GetBool("protect-apitoken")
+			if protectAPIToken {
+				logger.Info("API token protection enabled")
+				err = apitokencontroller.Add(mgr)
+				if err != nil {
+					logger.Error(err)
+					os.Exit(1)
+				}
+			}
+
+			// Add Zone controller for authentication purposes
+			if err := zonecontroller.Add(mgr, protectAPIToken); err != nil {
 				logger.Error(err)
 				os.Exit(1)
 			}
 
-			// TODO: Re-enable other controllers after fixing Cloudflare SDK compatibility
-			// protectAPIToken := v.GetBool("protect-apitoken")
-			// if protectAPIToken {
-			// 	err = apitokencontroller.Add(mgr)
-			// 	if err != nil {
-			// 		logger.Error(err)
-			// 		os.Exit(1)
-			// 	}
-			// }
-			// if err := zonecontroller.Add(mgr, protectAPIToken); err != nil { ... }
-			// if err := dnsrecordcontroller.Add(mgr); err != nil { ... }
-			// if err := pagerulecontroller.Add(mgr); err != nil { ... }
-			// if err := accessapplicationcontroller.Add(mgr); err != nil { ... }
-			// if err := wafrulecontroller.Add(mgr); err != nil { ... }
-			// if err := workerroutecontroller.Add(mgr); err != nil { ... }
-			// if err := webhook.AddToManager(mgr); err != nil { ... }
+			// Add Web Application Firewall controller
+			if err := wafrulecontroller.Add(mgr); err != nil {
+				logger.Error(err)
+				os.Exit(1)
+			}
+
+			// Add Rate Limiting controller
+			if err := ratelimitcontroller.Add(mgr); err != nil {
+				logger.Error(err)
+				os.Exit(1)
+			}
 
 			// Start the Cmd
 			if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
