@@ -37,7 +37,7 @@ func RootCmd() *cobra.Command {
 
 	cmd.AddCommand(Version())
 	cmd.AddCommand(ManagerCmd())
-	cmd.AddCommand(ImportCmd())
+	// cmd.AddCommand(ImportCmd()) // Temporarily disabled due to v1alpha1 migration
 
 	viper.BindPFlags(cmd.Flags())
 

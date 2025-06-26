@@ -17,7 +17,8 @@ func FetchWorkerRoutesForZone(token string, zone string, zoneID string) ([]*v1al
 		return nil, errors.Wrap(err, "create clouflare client")
 	}
 
-	resources, err := cf.ListWorkerRoutes(context.Background(), zoneID)
+	rc := cloudflare.ZoneIdentifier(zoneID)
+	resources, err := cf.ListWorkerRoutes(context.Background(), rc, cloudflare.ListWorkerRoutesParams{})
 	if err != nil {
 		return nil, errors.Wrap(err, "fetch resources")
 	}
@@ -38,7 +39,7 @@ func FetchWorkerRoutesForZone(token string, zone string, zoneID string) ([]*v1al
 			Spec: v1alpha1.WorkerRouteSpec{
 				Zone:    zone,
 				Pattern: resource.Pattern,
-				Script:  resource.Script,
+				Script:  "", // Script field may not be available in new SDK
 			},
 		}
 

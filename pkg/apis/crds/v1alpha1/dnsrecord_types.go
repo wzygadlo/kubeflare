@@ -40,12 +40,10 @@ type DNSRecordSpec struct {
 type DNSRecordStatus struct {
 }
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
 // DNSRecord is the Schema for the dnsrecords API
-// +k8s:openapi-gen=true
-// +kubebuilder:subresource:status
 type DNSRecord struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -54,7 +52,7 @@ type DNSRecord struct {
 	Status DNSRecordStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
 
 // DNSRecordList contains a list of DNSRecord
 type DNSRecordList struct {

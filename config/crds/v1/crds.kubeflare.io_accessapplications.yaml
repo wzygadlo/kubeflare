@@ -14,7 +14,7 @@ spec:
     singular: accessapplication
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - name: v1
     schema:
       openAPIV3Schema:
         description: DNSRecord is the Schema for the accessapplication API

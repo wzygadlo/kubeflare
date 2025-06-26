@@ -12,7 +12,7 @@ If the `settings` key is not included in the manifest, no settings will be chang
 the `settings` key is specified, only keys that are specified will be applied to the Cloudflare zone.
 
 ```yaml
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: Zone
 metadata:
   name: domainname.io

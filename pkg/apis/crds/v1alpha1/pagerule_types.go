@@ -64,12 +64,10 @@ type PageRuleStatus struct {
 	LastAppliedPriority int    `json:"lastAppliedPriority,omitempty"`
 }
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
 // PageRule is the Schema for the pagerules API
-// +k8s:openapi-gen=true
-// +kubebuilder:subresource:status
 type PageRule struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -78,7 +76,7 @@ type PageRule struct {
 	Status PageRuleStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
 
 // PageRuleList contains a list of PageRule
 type PageRuleList struct {

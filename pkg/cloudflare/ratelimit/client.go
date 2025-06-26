@@ -10,6 +10,15 @@ import (
 	"github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
 )
 
+// ClientInterface defines the interface for rate limit operations
+type ClientInterface interface {
+	Create(ctx context.Context, rateLimit *v1alpha1.RateLimit) (string, error)
+	Get(ctx context.Context, zoneID, ruleID string) (*RateLimitRule, error)
+	Update(ctx context.Context, rateLimit *v1alpha1.RateLimit) error
+	Delete(ctx context.Context, zoneID, ruleID string) error
+	List(ctx context.Context, zoneID string) ([]*RateLimitRule, error)
+}
+
 // Client handles Cloudflare rate limit operations using Rulesets API
 type Client struct {
 	api *cf.API
@@ -48,8 +57,9 @@ func (c *Client) Create(ctx context.Context, rateLimit *v1alpha1.RateLimit) (str
 	// Create the rule within the ruleset
 	rule := convertToRulesetRule(rateLimit)
 
-	// Update the entire ruleset with the new rule
-	ruleset, err := c.api.GetZoneRuleset(ctx, rateLimit.Spec.ZoneID, rulesetID)
+	// Update the entire ruleset with the new rule using new API format
+	rc := cf.ZoneIdentifier(rateLimit.Spec.ZoneID)
+	ruleset, err := c.api.GetRuleset(ctx, rc, rulesetID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get ruleset: %w", err)
 	}
@@ -59,7 +69,12 @@ func (c *Client) Create(ctx context.Context, rateLimit *v1alpha1.RateLimit) (str
 	newRule.ID = "" // Let Cloudflare generate the ID
 	ruleset.Rules = append(ruleset.Rules, newRule)
 
-	resp, err := c.api.UpdateZoneRuleset(ctx, rateLimit.Spec.ZoneID, rulesetID, ruleset.Description, ruleset.Rules)
+	updateParams := cf.UpdateRulesetParams{
+		ID:          rulesetID,
+		Description: ruleset.Description,
+		Rules:       ruleset.Rules,
+	}
+	resp, err := c.api.UpdateRuleset(ctx, rc, updateParams)
 	if err != nil {
 		return "", fmt.Errorf("failed to create rate limiting rule: %w", err)
 	}
@@ -79,7 +94,8 @@ func (c *Client) Get(ctx context.Context, zoneID, ruleID string) (*RateLimitRule
 		return nil, fmt.Errorf("failed to find rate limiting ruleset: %w", err)
 	}
 
-	ruleset, err := c.api.GetZoneRuleset(ctx, zoneID, rulesetID)
+	rc := cf.ZoneIdentifier(zoneID)
+	ruleset, err := c.api.GetRuleset(ctx, rc, rulesetID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ruleset: %w", err)
 	}
@@ -111,7 +127,8 @@ func (c *Client) Update(ctx context.Context, rateLimit *v1alpha1.RateLimit) erro
 	}
 
 	// Get the current ruleset
-	ruleset, err := c.api.GetZoneRuleset(ctx, rateLimit.Spec.ZoneID, rulesetID)
+	rc := cf.ZoneIdentifier(rateLimit.Spec.ZoneID)
+	ruleset, err := c.api.GetRuleset(ctx, rc, rulesetID)
 	if err != nil {
 		return fmt.Errorf("failed to get ruleset: %w", err)
 	}
@@ -128,7 +145,12 @@ func (c *Client) Update(ctx context.Context, rateLimit *v1alpha1.RateLimit) erro
 	}
 
 	// Update the entire ruleset
-	_, err = c.api.UpdateZoneRuleset(ctx, rateLimit.Spec.ZoneID, rulesetID, ruleset.Description, ruleset.Rules)
+	updateParams := cf.UpdateRulesetParams{
+		ID:          rulesetID,
+		Description: ruleset.Description,
+		Rules:       ruleset.Rules,
+	}
+	_, err = c.api.UpdateRuleset(ctx, rc, updateParams)
 	if err != nil {
 		return fmt.Errorf("failed to update rate limiting rule: %w", err)
 	}
@@ -149,7 +171,8 @@ func (c *Client) Delete(ctx context.Context, zoneID, ruleID string) error {
 	}
 
 	// Get the current ruleset
-	ruleset, err := c.api.GetZoneRuleset(ctx, zoneID, rulesetID)
+	rc := cf.ZoneIdentifier(zoneID)
+	ruleset, err := c.api.GetRuleset(ctx, rc, rulesetID)
 	if err != nil {
 		return fmt.Errorf("failed to get ruleset: %w", err)
 	}
@@ -163,7 +186,12 @@ func (c *Client) Delete(ctx context.Context, zoneID, ruleID string) error {
 	}
 
 	// Update the ruleset without the deleted rule
-	_, err = c.api.UpdateZoneRuleset(ctx, zoneID, rulesetID, ruleset.Description, filteredRules)
+	updateParams := cf.UpdateRulesetParams{
+		ID:          rulesetID,
+		Description: ruleset.Description,
+		Rules:       filteredRules,
+	}
+	_, err = c.api.UpdateRuleset(ctx, rc, updateParams)
 	if err != nil {
 		return fmt.Errorf("failed to delete rate limiting rule: %w", err)
 	}
@@ -183,7 +211,8 @@ func (c *Client) List(ctx context.Context, zoneID string) ([]*RateLimitRule, err
 		return nil, fmt.Errorf("failed to find rate limiting ruleset: %w", err)
 	}
 
-	ruleset, err := c.api.GetZoneRuleset(ctx, zoneID, rulesetID)
+	rc := cf.ZoneIdentifier(zoneID)
+	ruleset, err := c.api.GetRuleset(ctx, rc, rulesetID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ruleset: %w", err)
 	}
@@ -211,11 +240,19 @@ func (c *Client) ensureRateLimitingRuleset(ctx context.Context, zoneID string) (
 		Name:        "Security Rules - Rate Limiting",
 		Description: "Rate limiting security rules managed by kubeflare",
 		Kind:        "zone",
-		Phase:       "http_request_rate_limit",
+		Phase:       "http_ratelimit",
 		Rules:       []cf.RulesetRule{},
 	}
 
-	resp, err := c.api.CreateZoneRuleset(ctx, zoneID, ruleset)
+	rc := cf.ZoneIdentifier(zoneID)
+	createParams := cf.CreateRulesetParams{
+		Name:        ruleset.Name,
+		Description: ruleset.Description,
+		Kind:        ruleset.Kind,
+		Phase:       ruleset.Phase,
+		Rules:       ruleset.Rules,
+	}
+	resp, err := c.api.CreateRuleset(ctx, rc, createParams)
 	if err != nil {
 		return "", err
 	}
@@ -225,13 +262,15 @@ func (c *Client) ensureRateLimitingRuleset(ctx context.Context, zoneID string) (
 
 // findRateLimitingRuleset finds the rate limiting ruleset for a zone
 func (c *Client) findRateLimitingRuleset(ctx context.Context, zoneID string) (string, error) {
-	rulesets, err := c.api.ListZoneRulesets(ctx, zoneID)
+	rc := cf.ZoneIdentifier(zoneID)
+	listParams := cf.ListRulesetsParams{}
+	rulesets, err := c.api.ListRulesets(ctx, rc, listParams)
 	if err != nil {
 		return "", err
 	}
 
 	for _, ruleset := range rulesets {
-		if ruleset.Phase == "http_request_rate_limit" {
+		if ruleset.Phase == "http_ratelimit" {
 			return ruleset.ID, nil
 		}
 	}
@@ -239,55 +278,64 @@ func (c *Client) findRateLimitingRuleset(ctx context.Context, zoneID string) (st
 	return "", errors.New("rate limiting ruleset not found")
 }
 
+// mapActionMode converts kubeflare action modes to official Cloudflare API actions
+func mapActionMode(mode string) string {
+	switch mode {
+	case "simulate":
+		return "log" // Legacy: simulate maps to log
+	case "ban":
+		return "block" // Legacy: ban maps to block
+	case "block", "challenge", "js_challenge", "managed_challenge", "log":
+		return mode // Official Cloudflare actions
+	default:
+		return "log" // Default to log for unknown actions
+	}
+}
+
 // convertToRulesetRule converts from CRD model to Ruleset API model
 func convertToRulesetRule(rateLimit *v1alpha1.RateLimit) cf.RulesetRule {
 	// Build expression from match criteria
 	expression := buildRateLimitExpression(rateLimit.Spec.Match)
 
-	// Prepare action parameters based on the action mode
-	actionParams := &cf.RulesetRuleActionParameters{}
-	if rateLimit.Spec.Threshold > 0 && rateLimit.Spec.Period > 0 {
-		actionParams.Headers = map[string]cf.RulesetRuleActionParametersHTTPHeader{
-			"X-Rate-Limit-Requests": {Value: fmt.Sprintf("%d", rateLimit.Spec.Threshold)},
-			"X-Rate-Limit-Period":   {Value: fmt.Sprintf("%d", rateLimit.Spec.Period)},
-		}
+	// Map the action mode to official Cloudflare API action
+	action := mapActionMode(rateLimit.Spec.Action.Mode)
+
+	// Create enabled pointer
+	enabled := !rateLimit.Spec.Disabled
+
+	// Create the rule with proper rate limiting configuration using latest SDK
+	rule := cf.RulesetRule{
+		Expression:  expression,
+		Action:      action,
+		Description: rateLimit.Spec.Description,
+		Enabled:     &enabled,
+		RateLimit: &cf.RulesetRuleRateLimit{
+			Characteristics:   []string{"cf.colo.id", "ip.src"}, // Include required cf.colo.id
+			Period:            rateLimit.Spec.Period,
+			RequestsPerPeriod: rateLimit.Spec.Threshold,
+			MitigationTimeout: rateLimit.Spec.Action.Timeout,
+		},
 	}
 
-	// Note: RateLimit and Response fields don't exist in RulesetRuleActionParameters
-	// These need to be handled differently or the struct needs to be updated
-	// For now, we'll use headers to pass rate limiting information
-
-	return cf.RulesetRule{
-		Expression:       expression,
-		Action:           "rate_limit",
-		Description:      rateLimit.Spec.Description,
-		Enabled:          !rateLimit.Spec.Disabled,
-		ActionParameters: actionParams,
-	}
+	return rule
 }
 
 // convertFromRulesetRule converts from Ruleset API model to our internal model
 func convertFromRulesetRule(rule *cf.RulesetRule) *RateLimitRule {
+	enabled := rule.Enabled != nil && *rule.Enabled
+
 	rl := &RateLimitRule{
 		ID:          rule.ID,
 		Expression:  rule.Expression,
 		Action:      rule.Action,
 		Description: rule.Description,
-		Enabled:     rule.Enabled,
+		Enabled:     enabled,
 	}
 
-	// Extract rate limiting information from headers since RateLimit field doesn't exist
-	if rule.ActionParameters != nil && rule.ActionParameters.Headers != nil {
-		if reqHeader, ok := rule.ActionParameters.Headers["X-Rate-Limit-Requests"]; ok {
-			if requests, err := fmt.Sscanf(reqHeader.Value, "%d", &rl.Requests); err == nil && requests == 1 {
-				// Successfully parsed requests
-			}
-		}
-		if periodHeader, ok := rule.ActionParameters.Headers["X-Rate-Limit-Period"]; ok {
-			if periods, err := fmt.Sscanf(periodHeader.Value, "%d", &rl.Period); err == nil && periods == 1 {
-				// Successfully parsed period
-			}
-		}
+	// Extract rate limiting information from RateLimit field in latest SDK
+	if rule.RateLimit != nil {
+		rl.Requests = rule.RateLimit.RequestsPerPeriod
+		rl.Period = rule.RateLimit.Period
 	}
 
 	return rl
@@ -310,16 +358,25 @@ func buildRateLimitExpression(match v1alpha1.RateLimitMatch) string {
 	if len(match.Schemes) > 0 {
 		schemeConditions := make([]string, len(match.Schemes))
 		for i, scheme := range match.Schemes {
-			schemeConditions[i] = fmt.Sprintf(`http.request.uri.scheme eq "%s"`, scheme)
+			schemeConditions[i] = fmt.Sprintf(`http.request.scheme eq "%s"`, scheme)
 		}
 		conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(schemeConditions, " or ")))
 	}
 
-	// Add URL pattern conditions
+	// Add URL pattern conditions using wildcard format like working example
 	if len(match.URL.Patterns) > 0 {
 		urlConditions := make([]string, len(match.URL.Patterns))
 		for i, pattern := range match.URL.Patterns {
-			urlConditions[i] = fmt.Sprintf(`http.request.uri.path matches "%s"`, pattern)
+			// Convert pattern to path-only format and use wildcard operator
+			// Remove domain prefix if present and ensure it starts with /
+			pathPattern := pattern
+			if strings.Contains(pattern, "/") {
+				parts := strings.SplitN(pattern, "/", 2)
+				if len(parts) > 1 {
+					pathPattern = "/" + parts[1]
+				}
+			}
+			urlConditions[i] = fmt.Sprintf(`starts_with(http.request.uri.path, "%s")`, strings.TrimSuffix(pathPattern, "*"))
 		}
 		conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(urlConditions, " or ")))
 	}

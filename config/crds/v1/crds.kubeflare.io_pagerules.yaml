@@ -14,7 +14,7 @@ spec:
     singular: pagerule
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - name: v1
     schema:
       openAPIV3Schema:
         description: PageRule is the Schema for the pagerules API

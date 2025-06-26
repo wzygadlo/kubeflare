@@ -23,22 +23,21 @@ import (
 
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/pkg/errors"
-	crdsv1alpha1 "github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
-	"github.com/replicatedhq/kubeflare/pkg/controller/shared"
-	"github.com/replicatedhq/kubeflare/pkg/internal"
-	"github.com/replicatedhq/kubeflare/pkg/logger"
 	"go.uber.org/zap"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	crdsv1alpha1 "github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
+	"github.com/replicatedhq/kubeflare/pkg/controller/shared"
+	"github.com/replicatedhq/kubeflare/pkg/internal"
+	"github.com/replicatedhq/kubeflare/pkg/logger"
 )
 
 // Add creates a new WorkerRoute Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
@@ -57,25 +56,20 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	// Create a new controller
-	c, err := controller.New("workerroute-controller", mgr, controller.Options{Reconciler: r})
+	// Create controller using new builder pattern
+	err := builder.
+		ControllerManagedBy(mgr).
+		For(&crdsv1alpha1.WorkerRoute{}).
+		Complete(r)
 	if err != nil {
-		return err
-	}
-
-	// Watch for changes to WorkerRoute
-	err = c.Watch(&source.Kind{
-		Type: &crdsv1alpha1.WorkerRoute{},
-	}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return errors.Wrap(err, "failed to start watch on workerroutes")
+		return errors.Wrap(err, "failed to create workerroute controller")
 	}
 
 	generatedClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
 	generatedInformers := kubeinformers.NewSharedInformerFactory(generatedClient, time.Minute)
-	err = mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
-		generatedInformers.Start(s)
-		<-s
+	err = mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		generatedInformers.Start(ctx.Done())
+		<-ctx.Done()
 		return nil
 	}))
 	if err != nil {
@@ -94,8 +88,7 @@ type WorkerRouteReconciler struct {
 // +kubebuilder:rbac:groups=crds.kubeflare.io,resources=workerroutes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=crds.kubeflare.io,resources=workerroutes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=crds.kubeflare.io,resources=workerroutes/finalizers,verbs=update
-func (r *WorkerRouteReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	ctx := context.Background()
+func (r *WorkerRouteReconciler) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 
 	var instance crdsv1alpha1.WorkerRoute
 	if err := r.Get(ctx, request.NamespacedName, &instance); err != nil {

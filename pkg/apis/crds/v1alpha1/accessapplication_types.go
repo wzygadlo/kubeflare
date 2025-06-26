@@ -21,10 +21,10 @@ import (
 )
 
 type AccessPolicy struct {
-	Decision   string   `json:"descision"`
+	Decision   string   `json:"decision"`
 	Name       string   `json:"name"`
 	Include    []string `json:"include"` // TODO
-	Precedence *int     `json:"precendence,omitempty"`
+	Precedence *int     `json:"precedence,omitempty"`
 	Exclude    []string `json:"exclude,omitempty"` // TODO
 	Require    []string `json:"require,omitempty"` // TODO
 }
@@ -32,7 +32,7 @@ type AccessPolicy struct {
 type CORSHeader struct {
 	AllowedMethods   []string `json:"allowedMethods"`
 	AllowedOrigins   []string `json:"allowedOrigins"`
-	AllowedHeaders   []string `json:"allowedHeader"`
+	AllowedHeaders   []string `json:"allowedHeaders"`
 	AllowAllMethods  bool     `json:"allowAllMethods"`
 	AllowAllOrigins  bool     `json:"allowAllOrigins"`
 	AllowAllHeaders  bool     `json:"allowAllHeaders"`
@@ -47,22 +47,20 @@ type AccessApplicationSpec struct {
 	Domain                 string         `json:"domain"`
 	SessionDuration        string         `json:"sessionDuration,omitempty"`
 	AllowedIdPs            []string       `json:"allowedIdPs,omitempty"`
-	AutoRedirectToIdentity *bool          `json:"autoRedirectToIndentiy,omitempty"`
+	AutoRedirectToIdentity *bool          `json:"autoRedirectToIdentity,omitempty"`
 	CORSHeaders            *CORSHeader    `json:"corsHeaders,omitempty"`
 	AccessPolicies         []AccessPolicy `json:"accessPolicies,omitempty"`
 }
 
-// AccessApplicationStatus defines the observed state of AccessApplicationS
+// AccessApplicationStatus defines the observed state of AccessApplication
 type AccessApplicationStatus struct {
 	ApplicationID string `json:"applicationID,omitempty"`
 }
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
-// DNSRecord is the Schema for the accessapplication API
-// +k8s:openapi-gen=true
-// +kubebuilder:subresource:status
+// AccessApplication is the Schema for the accessapplication API
 type AccessApplication struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -71,13 +69,13 @@ type AccessApplication struct {
 	Status AccessApplicationStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
 
-// AccessApplicationList contains a list of DNSRecord
+// AccessApplicationList contains a list of AccessApplication
 type AccessApplicationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []DNSRecord `json:"items"`
+	Items           []AccessApplication `json:"items"`
 }
 
 func init() {

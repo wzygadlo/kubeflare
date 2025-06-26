@@ -17,7 +17,7 @@ Full instruction and all installation methods are listed in the [documentation](
 Below is an example of a Kubernetes manifest that we deploy for a domain (with some information redacted):
 
 ```yaml
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: Zone
 metadata:
   name: domainname.io
@@ -29,7 +29,7 @@ spec:
     minify:
       css: true
 ---
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: DNSRecord
 metadata:
   name: www.domainname.io
@@ -42,7 +42,7 @@ spec:
     proxied: true
     ttl: 3600
 ---
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: DNSRecord
 metadata:
   name: mx-records

@@ -3,6 +3,7 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -10,6 +11,10 @@ import (
 type RateLimitSpec struct {
 	// ZoneID is the Cloudflare Zone ID
 	ZoneID string `json:"zoneId"`
+
+	// APITokenSecretRef is an optional reference to a secret containing the API token
+	// If provided, this will be used instead of looking up the zone
+	APITokenSecretRef *corev1.SecretKeySelector `json:"apiTokenSecretRef,omitempty"`
 
 	// Description for the rate limit
 	Description string `json:"description,omitempty"`

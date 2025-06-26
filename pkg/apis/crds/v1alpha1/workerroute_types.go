@@ -36,13 +36,10 @@ type WorkerRouteStatus struct {
 	LastError string `json:"lastError,omitempty"`
 }
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
 // WorkerRoute is the Schema for the workerroutes API
-// +k8s:openapi-gen=true
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
 type WorkerRoute struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -51,10 +48,9 @@ type WorkerRoute struct {
 	Status WorkerRouteStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
 
 // WorkerRouteList contains a list of WorkerRoute
-// +kubebuilder:object:root=true
 type WorkerRouteList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

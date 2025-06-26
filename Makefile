@@ -55,7 +55,7 @@ test: generate fmt vet manifests
 	go test ./pkg/... ./cmd/... -coverprofile cover.out
 
 .PHONY: kubeflare
-kubeflare: generate fmt vet bin/kubeflare 
+kubeflare: generate bin/kubeflare 
 
 .PHONY: bin/kubeflare
 bin/kubeflare:
@@ -71,11 +71,11 @@ run: generate fmt vet bin/kubeflare
 
 .PHONY: install
 install: manifests generate dev
-	kubectl apply -f config/crds/v1
+	kubectl apply -f config/crds/v1alpha1
 
 .PHONY: deploy
 deploy: manifests
-	kubectl apply -f config/crds/v1
+	kubectl apply -f config/crds/v1alpha1
 	kustomize build config/default | kubectl apply -f -
 
 .PHONY: manifests
@@ -83,7 +83,7 @@ manifests: controller-gen
 	$(CONTROLLER_GEN) \
 		rbac:roleName=manager-role webhook \
 		crd:crdVersions=v1 \
-		output:crd:artifacts:config=config/crds/v1 \
+		output:crd:artifacts:config=config/crds/v1alpha1 \
 		paths="./..."
 
 .PHONY: fmt
@@ -114,6 +114,13 @@ dev: kubeflare
 .PHONY: image
 image: kubeflare
 	docker build -t kubeflare/kubeflare-manager:$(IMAGE_TAG) -f ./Dockerfile.manager .
+
+.PHONY: build-dev-image
+build-dev-image:
+	make generate
+	docker build -t kubeflare/kubeflare-manager -f ./Dockerfile.manager .
+	docker tag kubeflare/kubeflare-manager localhost:5000/kubeflare/kubeflare-manager:latest
+	docker push localhost:5000/kubeflare/kubeflare-manager:latest
 
 .PHONY: controller-gen
 controller-gen:

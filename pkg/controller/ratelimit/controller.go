@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -25,7 +24,7 @@ const (
 type RateLimitReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	CFClient *cfratelimit.Client
+	CFClient cfratelimit.ClientInterface
 }
 
 // +kubebuilder:rbac:groups=kubeflare.replicated.com,resources=ratelimits,verbs=get;list;watch;create;update;patch;delete
@@ -33,9 +32,8 @@ type RateLimitReconciler struct {
 // +kubebuilder:rbac:groups=kubeflare.replicated.com,resources=ratelimits/finalizers,verbs=update
 
 // Reconcile handles reconciliation of RateLimit resources
-func (r *RateLimitReconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
-	ctx := context.Background()
-	logger := log.FromContext(ctx)
+func (r *RateLimitReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
+	logger := ctrl.Log.WithName("ratelimit-controller")
 
 	// Fetch the RateLimit instance
 	rateLimit := &kubeflarev1alpha1.RateLimit{}
@@ -50,7 +48,13 @@ func (r *RateLimitReconciler) Reconcile(req reconcile.Request) (reconcile.Result
 		return ctrl.Result{}, err
 	}
 
-	// Get the zone for this rate limit
+	// Check if we should use direct secret access or the traditional Zone/APIToken approach
+	if rateLimit.Spec.APITokenSecretRef != nil {
+		// Use simplified approach with direct secret access
+		return r.reconcileWithSecret(ctx, rateLimit)
+	}
+
+	// Get the zone for this rate limit (traditional approach)
 	zone, err := shared.GetZone(ctx, rateLimit.Namespace, rateLimit.Spec.ZoneID)
 	if err != nil {
 		logger.Error(err, "Failed to get zone", "zoneID", rateLimit.Spec.ZoneID)
@@ -126,7 +130,7 @@ func (r *RateLimitReconciler) Reconcile(req reconcile.Request) (reconcile.Result
 
 // reconcileDelete handles deletion of a RateLimit resource
 func (r *RateLimitReconciler) reconcileDelete(ctx context.Context, rateLimit *kubeflarev1alpha1.RateLimit) (reconcile.Result, error) {
-	logger := log.FromContext(ctx)
+	logger := ctrl.Log.WithName("ratelimit-delete")
 
 	// If the resource has a Cloudflare ID, delete it from Cloudflare
 	if rateLimit.Status.ID != "" {
@@ -156,7 +160,7 @@ func (r *RateLimitReconciler) reconcileDelete(ctx context.Context, rateLimit *ku
 
 // reconcileSync handles creation or update of a RateLimit resource
 func (r *RateLimitReconciler) reconcileSync(ctx context.Context, rateLimit *kubeflarev1alpha1.RateLimit) (reconcile.Result, error) {
-	logger := log.FromContext(ctx)
+	logger := ctrl.Log.WithName("ratelimit-sync")
 
 	// If there's no ID, create a new rate limit
 	if rateLimit.Status.ID == "" {

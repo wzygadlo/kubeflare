@@ -32,7 +32,7 @@ The following attributes are supported in the `record` or `records` object:
 The following example will ensure that a single A record for `www` exists, proxied, and pointing to 1.1.1.1:
 
 ```yaml
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: DNSRecord
 metadata:
   name: www.domainname.io
@@ -51,7 +51,7 @@ spec:
 The following example will configure GSuite MX records for a domain:
 
 ```yaml
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: DNSRecord
 metadata:
   name: mx-records

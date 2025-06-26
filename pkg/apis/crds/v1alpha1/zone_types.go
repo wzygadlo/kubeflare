@@ -28,7 +28,7 @@ type SecurityHeader struct {
 }
 
 type MobileRedirect struct {
-	Status          *bool   `json:"status,omi2tempty"`
+	Status          *bool   `json:"status,omitempty"`
 	MobileSubdomain *string `json:"mobileSubdomain,omitempty"`
 	StripURI        *bool   `json:"stripURI,omitempty"`
 }
@@ -96,12 +96,10 @@ type ZoneSpec struct {
 type ZoneStatus struct {
 }
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
 // Zone is the Schema for the zones API
-// +k8s:openapi-gen=true
-// +kubebuilder:subresource:status
 type Zone struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -110,7 +108,7 @@ type Zone struct {
 	Status ZoneStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
 
 // ZoneList contains a list of Zone
 type ZoneList struct {

@@ -18,23 +18,22 @@ package pagerule
 
 import (
 	"context"
-	"go.uber.org/zap"
 	"time"
 
 	"github.com/pkg/errors"
-	crdsv1alpha1 "github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
-	"github.com/replicatedhq/kubeflare/pkg/controller/shared"
-	"github.com/replicatedhq/kubeflare/pkg/logger"
+	"go.uber.org/zap"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	crdsv1alpha1 "github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
+	"github.com/replicatedhq/kubeflare/pkg/controller/shared"
+	"github.com/replicatedhq/kubeflare/pkg/logger"
 )
 
 // Add creates a new PageRule Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
@@ -53,25 +52,20 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	// Create a new controller
-	c, err := controller.New("pagerule-controller", mgr, controller.Options{Reconciler: r})
+	// Create controller using new builder pattern
+	err := builder.
+		ControllerManagedBy(mgr).
+		For(&crdsv1alpha1.PageRule{}).
+		Complete(r)
 	if err != nil {
-		return err
-	}
-
-	// Watch for changes to PageRule
-	err = c.Watch(&source.Kind{
-		Type: &crdsv1alpha1.PageRule{},
-	}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return errors.Wrap(err, "failed to start watch on pagerule")
+		return errors.Wrap(err, "failed to create pagerule controller")
 	}
 
 	generatedClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
 	generatedInformers := kubeinformers.NewSharedInformerFactory(generatedClient, time.Minute)
-	err = mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
-		generatedInformers.Start(s)
-		<-s
+	err = mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		generatedInformers.Start(ctx.Done())
+		<-ctx.Done()
 		return nil
 	}))
 	if err != nil {
@@ -93,10 +87,9 @@ type ReconcilePageRule struct {
 // and what is in the Zone.Spec
 // +kubebuilder:rbac:groups=crds.kubeflare.io,resources=pagerules,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=crds.kubeflare.io,resources=pagerules/status,verbs=get;update;patch
-func (r *ReconcilePageRule) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *ReconcilePageRule) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	// This reconcile loop will be called for all ReconcilePageRule objects
 	// because of the informer that we have set up
-	ctx := context.Background()
 	instance := crdsv1alpha1.PageRule{}
 	err := r.Get(ctx, request.NamespacedName, &instance)
 	if err != nil {

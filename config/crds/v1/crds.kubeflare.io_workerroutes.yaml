@@ -14,7 +14,7 @@ spec:
     singular: workerroute
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - name: v1
     schema:
       openAPIV3Schema:
         description: WorkerRoute is the Schema for the workerroutes API

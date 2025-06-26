@@ -14,7 +14,7 @@ spec:
     singular: webapplicationfirewallrule
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - name: v1
     schema:
       openAPIV3Schema:
         description: WebApplicationFirewallRule is the Schema for the webapplicationfirewallrules

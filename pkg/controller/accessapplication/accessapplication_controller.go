@@ -21,18 +21,17 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	crdsv1alpha1 "github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
-	"github.com/replicatedhq/kubeflare/pkg/controller/shared"
-	"github.com/replicatedhq/kubeflare/pkg/logger"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	crdsv1alpha1 "github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
+	"github.com/replicatedhq/kubeflare/pkg/controller/shared"
+	"github.com/replicatedhq/kubeflare/pkg/logger"
 )
 
 // Add creates a new AccessApplication Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
@@ -51,25 +50,20 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	// Create a new controller
-	c, err := controller.New("accessapplication-controller", mgr, controller.Options{Reconciler: r})
+	// Create controller using new builder pattern
+	err := builder.
+		ControllerManagedBy(mgr).
+		For(&crdsv1alpha1.AccessApplication{}).
+		Complete(r)
 	if err != nil {
-		return err
-	}
-
-	// Watch for changes to AccessApplication
-	err = c.Watch(&source.Kind{
-		Type: &crdsv1alpha1.AccessApplication{},
-	}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return errors.Wrap(err, "failed to start watch on accessapplication")
+		return errors.Wrap(err, "failed to create accessapplication controller")
 	}
 
 	generatedClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
 	generatedInformers := kubeinformers.NewSharedInformerFactory(generatedClient, time.Minute)
-	err = mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
-		generatedInformers.Start(s)
-		<-s
+	err = mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		generatedInformers.Start(ctx.Done())
+		<-ctx.Done()
 		return nil
 	}))
 	if err != nil {
@@ -91,10 +85,9 @@ type ReconcileAccessApplication struct {
 // and what is in the Zone.Spec
 // +kubebuilder:rbac:groups=crds.kubeflare.io,resources=accessapplications,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=crds.kubeflare.io,resources=accessapplications/status,verbs=get;update;patch
-func (r *ReconcileAccessApplication) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *ReconcileAccessApplication) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	// This reconcile loop will be called for all ReconcileAccessApplication objects
 	// because of the informer that we have set up
-	ctx := context.Background()
 	instance := crdsv1alpha1.AccessApplication{}
 	err := r.Get(ctx, request.NamespacedName, &instance)
 	if err != nil {
