@@ -1,4 +1,4 @@
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: Zone
 metadata:
   name: always-use-https

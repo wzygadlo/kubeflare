@@ -38,11 +38,10 @@ type WebApplicationFirewallRuleStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
 // WebApplicationFirewallRule is the Schema for the webapplicationfirewallrules API
-// +k8s:openapi-gen=true
 type WebApplicationFirewallRule struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -51,7 +50,7 @@ type WebApplicationFirewallRule struct {
 	Status WebApplicationFirewallRuleStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
 
 // WebApplicationFirewallRuleList contains a list of WebApplicationFirewallRule
 type WebApplicationFirewallRuleList struct {

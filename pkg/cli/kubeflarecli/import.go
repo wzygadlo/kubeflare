@@ -7,12 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cloudflare/cloudflare-go"
+	"github.com/cloudflare/cloudflare-go/v4"
 	"github.com/pkg/errors"
 	kubeflarescheme "github.com/replicatedhq/kubeflare/pkg/client/kubeflareclientset/scheme"
-	"github.com/replicatedhq/kubeflare/pkg/cloudflare/dns"
-	"github.com/replicatedhq/kubeflare/pkg/cloudflare/pagerules"
-	"github.com/replicatedhq/kubeflare/pkg/cloudflare/workerroute"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	serializer "k8s.io/apimachinery/pkg/runtime/serializer/json"
@@ -22,8 +19,8 @@ import (
 func ImportCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "import",
-		Short:         "import existing settings from cloudflare into custom resources",
-		Long:          `...`,
+		Short:         "import existing security rules from cloudflare into custom resources",
+		Long:          `Import existing Web Application Firewall (WAF) rules and Rate Limiting rules from Cloudflare into Kubernetes custom resources`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		PreRun: func(cmd *cobra.Command, args []string) {
@@ -54,64 +51,14 @@ func ImportCmd() *cobra.Command {
 			kubeflarescheme.AddToScheme(scheme.Scheme)
 			s := serializer.NewYAMLSerializer(serializer.DefaultMetaFactory, scheme.Scheme, scheme.Scheme)
 
-			if v.GetBool("dns-records") {
-				dnsRecords, err := dns.FetchDNSRecordsForZone(v.GetString("api-token"), v.GetString("zone"), zoneID)
-				if err != nil {
-					return errors.Wrap(err, "fetch dns records")
-				}
+			// TODO: Implement WAF rule import using Rulesets API
 
-				for _, dnsRecord := range dnsRecords {
-					buf := bytes.NewBuffer(nil)
-					err := s.Encode(dnsRecord, buf)
-					if err != nil {
-						return errors.Wrap(err, "encode")
-					}
-					outputFile := filepath.Join(v.GetString("output-dir"), fmt.Sprintf("%s.yaml", dnsRecord.Name))
-					if err := ioutil.WriteFile(outputFile, buf.Bytes(), 0644); err != nil {
-						return errors.Wrap(err, "write file")
-					}
-				}
-			}
+			// TODO: Implement Rate Limit rule import using Rulesets API
 
-			if v.GetBool("page-rules") {
-				pageRules, err := pagerules.FetchPageRulesForZone(v.GetString("api-token"), v.GetString("zone"), zoneID)
-				if err != nil {
-					return errors.Wrap(err, "fetch page rules")
-				}
+			return fmt.Errorf("Import functionality for WAF rules and Rate Limits not yet implemented with the latest Cloudflare SDK v4.5.1")
 
-				for _, pageRule := range pageRules {
-					buf := bytes.NewBuffer(nil)
-					err := s.Encode(pageRule, buf)
-					if err != nil {
-						return errors.Wrap(err, "encode")
-					}
-					outputFile := filepath.Join(v.GetString("output-dir"), fmt.Sprintf("%s.yaml", pageRule.Name))
-					if err := ioutil.WriteFile(outputFile, buf.Bytes(), 0644); err != nil {
-						return errors.Wrap(err, "write file")
-					}
-				}
-			}
-
-			if v.GetBool("worker-routes") {
-				workerRoutes, err := workerroute.FetchWorkerRoutesForZone(v.GetString("api-token"), v.GetString("zone"), zoneID)
-				if err != nil {
-					return errors.Wrap(err, "fetch worker routes")
-				}
-
-				for _, workerRoute := range workerRoutes {
-					buf := bytes.NewBuffer(nil)
-					err := s.Encode(workerRoute, buf)
-					if err != nil {
-						return errors.Wrap(err, "encode")
-					}
-					outputFile := filepath.Join(v.GetString("output-dir"), fmt.Sprintf("%s.yaml", workerRoute.Name))
-					if err := ioutil.WriteFile(outputFile, buf.Bytes(), 0644); err != nil {
-						return errors.Wrap(err, "write file")
-					}
-				}
-			}
-
-			return nil
+			// NOTE: This return is unreachable, previous return will exit the function
+			// Future implementation will focus on WAF rules and Rate Limits only
 		},
 	}
 
@@ -123,9 +70,8 @@ func ImportCmd() *cobra.Command {
 
 	cmd.Flags().String("output-dir", filepath.Join(".", "imported"), "output dir to write files to")
 
-	cmd.Flags().Bool("dns-records", true, "when set, import existing dns records from the zone")
-	cmd.Flags().Bool("page-rules", true, "when set, import existing page rules from the zone")
-	cmd.Flags().Bool("worker-routes", true, "when set, import existing worker routes from the zone")
+	cmd.Flags().Bool("waf-rules", true, "when set, import existing web application firewall rules from the zone")
+	cmd.Flags().Bool("rate-limits", true, "when set, import existing rate limiting rules from the zone")
 
 	return cmd
 }

@@ -8,7 +8,7 @@ inline (not recommended) or referenced from a Kubernetes secret.
 #### Inline
 
 ```yaml
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: APIToken
 metadata:
   name: api-token-name
@@ -21,7 +21,7 @@ spec:
 #### Referencing a Kubernetes Secret
 
 ```yaml
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: APIToken
 metadata:
   name: api-token-name

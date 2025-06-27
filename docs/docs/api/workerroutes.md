@@ -45,7 +45,7 @@ If the worker route found, operator updates `status.id`, otherwise operator crea
 The following `WorkerRoute` manifest will execute a `images-script` on URLs matching `http(s)://example.com/images/*`
 
 ```yaml
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: WorkerRoute
 metadata:
   name: images-script

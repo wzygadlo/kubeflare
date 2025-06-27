@@ -19,7 +19,7 @@ kubectl -n kubeflare-system create secret generic cf-api-secret --from-literal c
 ### Define a Zone
 
 ```yaml
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: Zone
 metadata:
   name: domainname.io
@@ -36,7 +36,7 @@ Full API Documentation for Zones in Kubeflare [here] (/api/zone).
 ### Create an A Record
 
 ```yaml
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: DNSRecord
 metadata:
   name: www.domainname.io

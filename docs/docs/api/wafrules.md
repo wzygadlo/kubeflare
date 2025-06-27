@@ -30,7 +30,7 @@ The following attributes are supported in the `rules` object:
 The following example will set the mode for WAF Rule `PHP10001` to `simulate`:
 
 ```yaml
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: WebApplicationFirewallRule
 metadata:
   name: php-100001
@@ -46,7 +46,7 @@ spec:
 The following example will configure multiple PHP WAF Rules for a domain:
 
 ```yaml
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: WebApplicationFirewallRule
 metadata:
   name: php-rules

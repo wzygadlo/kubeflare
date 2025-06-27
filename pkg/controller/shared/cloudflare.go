@@ -2,24 +2,30 @@ package shared
 
 import (
 	"context"
-	"github.com/cloudflare/cloudflare-go"
+	"github.com/cloudflare/cloudflare-go/v4"
+	"github.com/cloudflare/cloudflare-go/v4/option"
 	"github.com/pkg/errors"
-	crdsclientv1alpha1 "github.com/replicatedhq/kubeflare/pkg/client/kubeflareclientset/typed/crds/v1alpha1"
+	"github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
 	"github.com/replicatedhq/kubeflare/pkg/logger"
 	"go.uber.org/zap"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 var HasDependenciesError = errors.New("dependency detected")
 
-func GetCloudflareAPI(ctx context.Context, namespace string, apiTokenName string) (*cloudflare.API, error) {
-	crdsClient, err := GetCrdClient()
+func GetCloudflareAPI(ctx context.Context, namespace string, apiTokenName string) (*cloudflare.Client, error) {
+	k8sClient, err := GetK8sClient()
 	if err != nil {
 		return nil, err
 	}
 
-	apiToken, err := crdsClient.APITokens(namespace).Get(ctx, apiTokenName, metav1.GetOptions{})
+	apiToken := &v1alpha1.APIToken{}
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Name:      apiTokenName,
+		Namespace: namespace,
+	}, apiToken)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get api token")
 	}
@@ -33,24 +39,31 @@ func GetCloudflareAPI(ctx context.Context, namespace string, apiTokenName string
 		zap.String("email", apiToken.Spec.Email),
 		zap.Int("tokenLength", len(tokenValue)))
 
-	api, err := cloudflare.NewWithAPIToken(tokenValue)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create cloudflare api instance")
+	api := cloudflare.NewClient(option.WithAPIToken(tokenValue))
+	if api == nil {
+		return nil, errors.New("failed to create cloudflare api instance")
 	}
 
 	return api, nil
 }
 
-func GetCrdClient() (*crdsclientv1alpha1.CrdsV1alpha1Client, error) {
+func GetK8sClient() (client.Client, error) {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get config")
 	}
 
-	crdsClient, err := crdsclientv1alpha1.NewForConfig(cfg)
+	k8sClient, err := client.New(cfg, client.Options{})
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create crds client")
+		return nil, errors.Wrap(err, "failed to create kubernetes client")
 	}
 
-	return crdsClient, nil
+	return k8sClient, nil
+}
+
+// GetCrdClient returns a placeholder client for kubeflare CRDs
+// This is a temporary placeholder for MVP - we'll implement it properly in Phase 4
+func GetCrdClient() (interface{}, error) {
+	// Return a placeholder value - the controllers using this are disabled in MVP
+	return nil, nil
 }

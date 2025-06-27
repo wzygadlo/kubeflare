@@ -18,28 +18,27 @@ package apitoken
 
 import (
 	"context"
-	"github.com/replicatedhq/kubeflare/pkg/internal"
+	"time"
+
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"time"
-
-	"github.com/pkg/errors"
-	crdsv1alpha1 "github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
-	"github.com/replicatedhq/kubeflare/pkg/controller/shared"
-	"github.com/replicatedhq/kubeflare/pkg/logger"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	crdsv1alpha1 "github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
+	"github.com/replicatedhq/kubeflare/pkg/controller/shared"
+	"github.com/replicatedhq/kubeflare/pkg/internal"
+	"github.com/replicatedhq/kubeflare/pkg/logger"
 )
 
 // Add creates a new APIToken Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
@@ -62,25 +61,20 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	// Create a new controller
-	c, err := controller.New("apitoken-controller", mgr, controller.Options{Reconciler: r})
+	// Create controller using new builder pattern
+	err := builder.
+		ControllerManagedBy(mgr).
+		For(&crdsv1alpha1.APIToken{}).
+		Complete(r)
 	if err != nil {
-		return err
-	}
-
-	// Watch for changes to APIToken
-	err = c.Watch(&source.Kind{
-		Type: &crdsv1alpha1.APIToken{},
-	}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return errors.Wrap(err, "failed to start watch on apitokens")
+		return errors.Wrap(err, "failed to create apitoken controller")
 	}
 
 	generatedClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
 	generatedInformers := kubeinformers.NewSharedInformerFactory(generatedClient, time.Minute)
-	err = mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
-		generatedInformers.Start(s)
-		<-s
+	err = mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		generatedInformers.Start(ctx.Done())
+		<-ctx.Done()
 		return nil
 	}))
 	if err != nil {
@@ -101,11 +95,9 @@ type ReconcileAPIToken struct {
 // Reconcile reads that state of the cluster for a APIToken object and makes changes based on the state read
 // and what is in the APIToken.Spec
 // +kubebuilder:rbac:groups=crds.kubeflare.io,resources=apitokens,verbs=get;list;watch;create;update;patch;delete
-func (r *ReconcileAPIToken) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *ReconcileAPIToken) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	// This reconcile loop will be called for all APIToken objects
 	// because of the informer that we have set up
-
-	ctx := context.Background()
 	instance := &crdsv1alpha1.APIToken{}
 
 	if err := r.Get(ctx, request.NamespacedName, instance); err != nil {

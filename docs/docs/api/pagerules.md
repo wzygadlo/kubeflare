@@ -69,7 +69,7 @@ The ForwardingURL object describes a forwarding url page rule.
 The following PageRule manifest will forward requests made to www.example.com to example.com:
 
 ```yaml
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: PageRule
 metadata:
   name: www.example.com
@@ -87,7 +87,7 @@ spec:
 The following PageRule manifest will enable always use https on a specific path:
 
 ```yaml
-apiVersion: crds.kubeflare.io/v1alpha1
+apiVersion: crds.kubeflare.io/v1
 kind: PageRule
 metadata:
   name: www.example.com

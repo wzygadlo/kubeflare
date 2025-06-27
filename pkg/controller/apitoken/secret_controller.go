@@ -18,26 +18,25 @@ package apitoken
 
 import (
 	"context"
-	"github.com/replicatedhq/kubeflare/pkg/internal"
+	"time"
+
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"time"
-
-	"github.com/pkg/errors"
-	"github.com/replicatedhq/kubeflare/pkg/controller/shared"
-	"github.com/replicatedhq/kubeflare/pkg/logger"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	"github.com/replicatedhq/kubeflare/pkg/controller/shared"
+	"github.com/replicatedhq/kubeflare/pkg/internal"
+	"github.com/replicatedhq/kubeflare/pkg/logger"
 )
 
 // newSecretReconciler returns a new reconcile.Reconciler
@@ -50,25 +49,20 @@ func newSecretReconciler(mgr manager.Manager) reconcile.Reconciler {
 
 // addSecret adds a new Controller to mgr with r as the reconcile.Reconciler
 func addSecret(mgr manager.Manager, r reconcile.Reconciler) error {
-	// Create a new controller
-	c, err := controller.New("secret-controller", mgr, controller.Options{Reconciler: r})
+	// Create controller using new builder pattern
+	err := builder.
+		ControllerManagedBy(mgr).
+		For(&v1.Secret{}).
+		Complete(r)
 	if err != nil {
-		return err
-	}
-
-	// Watch for changes to Secret
-	err = c.Watch(&source.Kind{
-		Type: &v1.Secret{},
-	}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return errors.Wrap(err, "failed to start watch on secrets")
+		return errors.Wrap(err, "failed to create secret controller")
 	}
 
 	generatedClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
 	generatedInformers := kubeinformers.NewSharedInformerFactory(generatedClient, time.Minute)
-	err = mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
-		generatedInformers.Start(s)
-		<-s
+	err = mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		generatedInformers.Start(ctx.Done())
+		<-ctx.Done()
 		return nil
 	}))
 	if err != nil {
@@ -89,8 +83,7 @@ type reconcileSecret struct {
 // Reconcile reads that state of the cluster for a Secret object and makes changes based on the state read
 // if the secrets is referenced from an APIToken and protectAPIToken is true
 // +kubebuilder:rbac:groups=,resources=secrets,verbs=create,update,patch,delete
-func (r *reconcileSecret) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	ctx := context.Background()
+func (r *reconcileSecret) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	instance := &v1.Secret{}
 
 	if err := r.Get(ctx, request.NamespacedName, instance); err != nil {

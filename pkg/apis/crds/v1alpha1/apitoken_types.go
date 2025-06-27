@@ -71,11 +71,10 @@ type APITokenSpec struct {
 type APITokenStatus struct {
 }
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
 // APIToken is the Schema for the APITokens API
-// +k8s:openapi-gen=true
 type APIToken struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -84,7 +83,7 @@ type APIToken struct {
 	Status APITokenStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
 
 // APITokenList contains a list of APIToken
 type APITokenList struct {

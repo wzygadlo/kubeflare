@@ -3,7 +3,7 @@ package zone
 import (
 	"testing"
 
-	"github.com/cloudflare/cloudflare-go"
+	"github.com/cloudflare/cloudflare-go/v4"
 	crdsv1alpha1 "github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
 	"github.com/stretchr/testify/assert"
 )

@@ -1,5 +1,4 @@
-/*
-Copyright 2019 Replicated, Inc.
+/*Copyright 2019 Replicated, Inc.ok n
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,27 +17,26 @@ package zone
 
 import (
 	"context"
-	crdsclientv1alpha1 "github.com/replicatedhq/kubeflare/pkg/client/kubeflareclientset/typed/crds/v1alpha1"
-	"github.com/replicatedhq/kubeflare/pkg/internal"
-	"go.uber.org/zap"
-	apiErrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"time"
 
 	"github.com/pkg/errors"
-	crdsv1alpha1 "github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
-	"github.com/replicatedhq/kubeflare/pkg/controller/shared"
-	"github.com/replicatedhq/kubeflare/pkg/logger"
+	"go.uber.org/zap"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	crdsv1alpha1 "github.com/replicatedhq/kubeflare/pkg/apis/crds/v1alpha1"
+	crdsclientv1alpha1 "github.com/replicatedhq/kubeflare/pkg/client/kubeflareclientset/typed/crds/v1alpha1"
+	"github.com/replicatedhq/kubeflare/pkg/controller/shared"
+	"github.com/replicatedhq/kubeflare/pkg/internal"
+	"github.com/replicatedhq/kubeflare/pkg/logger"
 )
 
 // Add creates a new Zone Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
@@ -58,25 +56,20 @@ func newReconciler(mgr manager.Manager, protectAPIToken bool) reconcile.Reconcil
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	// Create a new controller
-	c, err := controller.New("zone-controller", mgr, controller.Options{Reconciler: r})
+	// Create controller using new builder pattern
+	err := builder.
+		ControllerManagedBy(mgr).
+		For(&crdsv1alpha1.Zone{}).
+		Complete(r)
 	if err != nil {
-		return err
-	}
-
-	// Watch for changes to Zone
-	err = c.Watch(&source.Kind{
-		Type: &crdsv1alpha1.Zone{},
-	}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return errors.Wrap(err, "failed to start watch on zones")
+		return errors.Wrap(err, "failed to create zone controller")
 	}
 
 	generatedClient := kubernetes.NewForConfigOrDie(mgr.GetConfig())
 	generatedInformers := kubeinformers.NewSharedInformerFactory(generatedClient, time.Minute)
-	err = mgr.Add(manager.RunnableFunc(func(s <-chan struct{}) error {
-		generatedInformers.Start(s)
-		<-s
+	err = mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		generatedInformers.Start(ctx.Done())
+		<-ctx.Done()
 		return nil
 	}))
 	if err != nil {
@@ -99,10 +92,9 @@ type ReconcileZone struct {
 // and what is in the Zone.Spec
 // +kubebuilder:rbac:groups=crds.kubeflare.io,resources=zones,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=crds.kubeflare.io,resources=zones/status,verbs=get;update;patch
-func (r *ReconcileZone) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *ReconcileZone) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	// This reconcile loop will be called for all Zone objects
 	// because of the informer that we have set up
-	ctx := context.Background()
 	instance := &crdsv1alpha1.Zone{}
 	err := r.Get(ctx, request.NamespacedName, instance)
 	if err != nil {
@@ -228,6 +220,11 @@ func (r *ReconcileZone) zoneHasDependents(ctx context.Context, zone *crdsv1alpha
 		return hasDeps, err
 	}
 
+	hasDeps, err = r.zoneHasRateLimitDependents(ctx, crdsClient.RateLimits(zone.Namespace), zone.Name)
+	if err != nil || hasDeps {
+		return hasDeps, err
+	}
+
 	return false, nil
 }
 
@@ -299,6 +296,22 @@ func (r *ReconcileZone) zoneHasWorkerRouteDependents(ctx context.Context, client
 
 	for _, item := range list.Items {
 		if item.Spec.Zone == zone {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// Add the following function for RateLimit dependencies
+func (r *ReconcileZone) zoneHasRateLimitDependents(ctx context.Context, client crdsclientv1alpha1.RateLimitInterface, zone string) (bool, error) {
+	list, err := client.List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	for _, item := range list.Items {
+		if item.Spec.ZoneID == zone {
 			return true, nil
 		}
 	}

@@ -68,9 +68,9 @@ spec:
           description: APITokenStatus defines the observed state of APIToken
           type: object
       type: object
-  version: v1alpha1
+  version: v1
   versions:
-  - name: v1alpha1
+  - name: v1
     served: true
     storage: true
 status:
